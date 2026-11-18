@@ -1,0 +1,13 @@
+{
+  "name": "Unplugged",
+  "short_name": "Unplugged",
+  "description": "Plan your phone-free moments and remember to bring something better.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#14B8A6",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

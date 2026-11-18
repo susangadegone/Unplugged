@@ -5,12 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Unplugged</title>
   <meta name="description" content="Plan your phone-free moments and remember to bring something better." />
-  <meta name="theme-color" content="#14B8A6" />
+  <meta name="theme-color" content="#e9e1ff" />
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="icon.svg" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="Unplugged" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -18,6 +21,9 @@
 
   <div id="sheet-backdrop" class="backdrop" hidden></div>
   <section id="sheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title" hidden></section>
+
+  <button id="notif" class="notif" type="button" aria-live="assertive" hidden></button>
+  <div id="confetti" class="confetti" aria-hidden="true"></div>
 
   <script src="app.js"></script>
 </body>

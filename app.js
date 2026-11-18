@@ -62,8 +62,85 @@
   }
   function greeting() {
     const h = new Date().getHours();
-    return h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
+    return h < 12 ? "good morning ☀️" : h < 18 ? "hey, good afternoon ✨" : "good evening 🌙";
   }
+
+  // ---------- Celebration: confetti ----------
+  const $confetti = document.getElementById("confetti");
+  const reduceMotion = () => window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  function confetti(count = 70) {
+    if (reduceMotion()) return;
+    const colors = ["#9b7bff", "#ff8fcf", "#7cc8ff", "#ffd36e", "#8ef0c8", "#c9b8ff"];
+    let html = "";
+    for (let i = 0; i < count; i++) {
+      const left = Math.random() * 100;
+      const x = (Math.random() - 0.5) * 220;
+      const r = 360 + Math.random() * 720;
+      const d = 1.8 + Math.random() * 1.6;
+      const delay = Math.random() * 0.35;
+      const c = colors[i % colors.length];
+      const round = Math.random() > 0.6 ? "border-radius:50%;width:9px;height:9px;" : "";
+      html += `<i style="left:${left}%;background:${c};${round}--x:${x}px;--r:${r}deg;--d:${d}s;--delay:${delay}s"></i>`;
+    }
+    $confetti.innerHTML = html;
+    clearTimeout(confetti.t);
+    confetti.t = setTimeout(() => { $confetti.innerHTML = ""; }, 4000);
+  }
+
+  // ---------- Milestone badges (only ever earned, never lost) ----------
+  const MILESTONES = [
+    { id: "first", emoji: "🌱", name: "first moment", test: (d) => d.length >= 1 },
+    { id: "hour", emoji: "⏳", name: "1 hour unplugged", test: (d) => mins(d) >= 60 },
+    { id: "five", emoji: "🖐️", name: "5 moments", test: (d) => d.length >= 5 },
+    { id: "variety", emoji: "🎨", name: "3 different activities", test: (d) => new Set(d.map((x) => x.activityId)).size >= 3 },
+    { id: "ten", emoji: "🌸", name: "10 moments", test: (d) => d.length >= 10 },
+  ];
+  const mins = (d) => d.reduce((s, x) => s + (x.minutesSpent || 0), 0);
+  const earned = (d) => MILESTONES.filter((b) => b.test(d)).map((b) => b.id);
+
+  // ---------- Notification banner (in-app, iOS-style) ----------
+  const $notif = document.getElementById("notif");
+  function bestieText(m) {
+    const a = byId(m.activityId);
+    const thing = a.gear[0] ? a.gear[0].toLowerCase() : "eyes up";
+    const where = m.place ? `for the ${m.place.toLowerCase()}` : "for later";
+    return {
+      title: "leaving in 10 👀",
+      body: a.gear.length
+        ? `grab your ${thing} ${a.emoji} ${where}. future you says thx ✨`
+        : `no gear needed, just you ${a.emoji}. phone stays in the bag ✨`,
+    };
+  }
+  function showNotif(m) {
+    if (!m) return;
+    const t = bestieText(m);
+    $notif.innerHTML = `
+      <span class="ic" aria-hidden="true">⏻</span>
+      <span style="flex:1">
+        <span class="hd"><span>UNPLUGGED</span><span>now</span></span>
+        <span class="tt" style="display:block">${esc(t.title)}</span>
+        <span class="bd" style="display:block">${esc(t.body)}</span>
+      </span>`;
+    $notif.hidden = false;
+    requestAnimationFrame(() => requestAnimationFrame(() => $notif.classList.add("show")));
+    clearTimeout(showNotif.t);
+    showNotif.t = setTimeout(hideNotif, 7000);
+    // Also try a real system notification where the browser allows it.
+    try {
+      if ("Notification" in window && Notification.permission === "granted" && document.hidden) {
+        new Notification(t.title, { body: t.body, icon: "icon.svg" });
+      }
+    } catch { /* ignore */ }
+  }
+  function hideNotif() {
+    $notif.classList.remove("show");
+    setTimeout(() => { if (!$notif.classList.contains("show")) $notif.hidden = true; }, 600);
+  }
+  $notif.addEventListener("click", () => {
+    hideNotif();
+    const m = current();
+    if (m && m.status === "planned") go("checklist");
+  });
 
   // Matching: +2 if it fits the situation, +1 if it fits the time; drop what needs more time than you have.
   function rank(situation, minutes) {
@@ -98,11 +175,11 @@
     const ms = at - Date.now();
     if (ms <= 0 || ms > 12 * 3600e3) return;
     reminderTimer = setTimeout(() => {
-      const a = byId(m.activityId);
-      const body = `Leaving soon. Grab your ${a.gear[0] ? a.gear[0].toLowerCase() : a.name.toLowerCase()} ${a.emoji}`;
+      const t = bestieText(m);
       try {
-        if ("Notification" in window && Notification.permission === "granted") new Notification("Unplugged", { body });
+        if ("Notification" in window && Notification.permission === "granted") new Notification(t.title, { body: t.body, icon: "icon.svg" });
       } catch { /* ignore */ }
+      showNotif(m);
     }, ms);
   }
 
@@ -137,38 +214,43 @@
       const title = esc(m.place || s.label);
       const when = m.leaveAt ? ` · ${fmtTime(m.leaveAt)}` : "";
       const status = m.status === "packed"
-        ? `<span class="pill">✓ Packed</span>`
-        : m.status === "active" ? `<span class="pill">● Unplugged now</span>` : "";
+        ? `<span class="pill">✓ packed</span>`
+        : m.status === "active" ? `<span class="pill">● unplugged now</span>` : `<span class="pill">✧ planned</span>`;
       const actions = m.status === "planned"
-        ? `<button class="btn primary grow" data-act="checklist">Did you grab it?</button>`
+        ? `<button class="btn primary grow" data-act="checklist">did you grab it? ✧</button>`
         : m.status === "packed"
-          ? `<button class="btn primary grow" data-act="start">I'm here. Start</button>`
-          : `<button class="btn primary grow" data-act="resume">Back to my moment</button>`;
+          ? `<button class="btn primary grow" data-act="start">i'm here. start ✨</button>`
+          : `<button class="btn primary grow" data-act="resume">back to my moment</button>`;
       card = `
         <article class="card">
           <div class="row" style="justify-content:space-between;align-items:center">
-            <p class="eyebrow" style="margin:0">Next moment</p>${status}
+            <p class="eyebrow" style="margin:0">next moment</p>${status}
           </div>
           <p class="next-title">${s.emoji} ${title}${esc(when)}</p>
           <p class="muted small">${m.minutes} minutes, phone-free</p>
           <div class="bring">
             <div class="emoji" aria-hidden="true">${a.emoji}</div>
-            <div><p class="small muted">Bring</p><p><b>${esc(a.gear.length ? a.gear.join(" + ") : "Just you")}</b></p></div>
+            <div><p class="small muted">bring</p><p><b>${esc(a.gear.length ? a.gear.join(" + ") : "just you")}</b></p></div>
           </div>
           <p class="plan-quote">“${esc(m.plan)}”</p>
           <div class="card-actions">
             ${actions}
-            <button class="btn ghost" data-act="cancel" aria-label="Remove this moment">Remove</button>
+            <button class="btn ghost" data-act="cancel" aria-label="Remove this moment">remove</button>
           </div>
+          ${m.status === "planned" ? `<button class="linkish" data-act="previewNotif">preview my reminder 🔔</button>` : ""}
         </article>`;
     } else {
       card = `
         <article class="card empty">
-          <p class="eyebrow">Next moment</p>
-          <p class="next-title" style="font-size:22px">Nothing planned yet</p>
-          <p class="muted small" style="margin-top:6px">Going somewhere you'll wait? Plan what you'll bring instead of your phone.</p>
+          <p class="eyebrow">next moment</p>
+          <p class="next-title" style="font-size:22px">nothing planned yet ☁️</p>
+          <p class="muted small" style="margin-top:6px">going somewhere you'll wait? plan what you'll bring instead of your phone.</p>
         </article>`;
     }
+
+    const got = earned(done);
+    const badgeRow = `<div><p class="eyebrow">your badges</p><div class="badges">${MILESTONES.map((b) =>
+      `<span class="badge-chip ${got.includes(b.id) ? "" : "locked"}">${b.emoji} ${b.name}</span>`).join("")}</div></div>`;
 
     const recent = done.slice(-3).reverse().map((x) => {
       const a = byId(x.activityId);
@@ -177,16 +259,17 @@
 
     return `
       <div class="brand"><span class="dot"></span>Unplugged</div>
-      <h1>${greeting()}.<br><span class="muted">Ready to unplug?</span></h1>
+      <h1>${greeting()}<br><span class="soft">ready to unplug?</span></h1>
       ${card}
-      ${m ? "" : `<button class="btn primary block" data-act="plan">Plan a moment +</button>`}
+      ${m ? "" : `<button class="btn primary block" data-act="plan">plan a moment ✨</button>`}
       <div class="totals">
         <div class="stat"><b>${done.length}</b><span>unplugged moments</span></div>
         <div class="stat"><b>${fmtMinutes(totalMin)}</b><span>phone-free</span></div>
       </div>
-      ${recent ? `<div><p class="eyebrow">Recently</p><div class="recent">${recent}</div></div>` : ""}
+      ${badgeRow}
+      ${recent ? `<div><p class="eyebrow">recently</p><div class="recent">${recent}</div></div>` : ""}
       <div class="spacer"></div>
-      <p class="muted small" style="text-align:center">Everything stays on this device.</p>`;
+      <p class="footnote">everything stays on this device 🔒</p>`;
   }
 
   function checklist() {
@@ -196,13 +279,15 @@
     const items = [...a.gear, "Phone on silent, tucked away"];
     m.packedItems = m.packedItems || [];
     const all = items.every((_, i) => m.packedItems.includes(i));
+    const pct = Math.round((m.packedItems.length / items.length) * 100);
     return `
-      <div class="topbar"><button class="back" data-act="home">‹ Back</button></div>
+      <div class="topbar"><button class="back" data-act="home">‹ back</button></div>
       <div>
-        <p class="eyebrow">Before you go</p>
-        <h1>Did you grab it?</h1>
+        <p class="eyebrow">before you go</p>
+        <h1>did you grab it? 🎒</h1>
         <p class="muted" style="margin-top:8px">“${esc(m.plan)}”</p>
       </div>
+      <div class="progress" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100" aria-label="Packed"><i style="width:${pct}%"></i></div>
       <div class="checklist">
         ${items.map((it, i) => {
           const on = m.packedItems.includes(i);
@@ -210,7 +295,7 @@
         }).join("")}
       </div>
       <div class="spacer"></div>
-      <button class="btn primary block" data-act="packed" ${all ? "" : "disabled"}>${all ? "All set. Let's go" : "Tick everything off"}</button>`;
+      <button class="btn primary block" data-act="packed" ${all ? "" : "disabled"}>${all ? "all set. let's go 🚀" : "tick everything off"}</button>`;
   }
 
   function active() {
@@ -218,11 +303,12 @@
     if (!m) return home();
     const a = byId(m.activityId);
     return `
-      <div class="topbar"><span class="brand"><span class="dot"></span>Unplugged now</span></div>
+      <div class="topbar"><span class="brand"><span class="dot"></span>unplugged now</span></div>
       <p class="big-quote">“${esc(m.plan)}”</p>
       <div class="timer-wrap">
         <div class="ring">
-          <svg width="240" height="240" viewBox="0 0 240 240" aria-hidden="true">
+          <svg width="250" height="250" viewBox="-5 -5 250 250" aria-hidden="true">
+            <defs><linearGradient id="grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#9b7bff"/><stop offset="0.5" stop-color="#ff8fcf"/><stop offset="1" stop-color="#7cc8ff"/></linearGradient></defs>
             <circle class="track" cx="120" cy="120" r="108" fill="none" stroke-width="10"/>
             <circle class="prog" id="prog" cx="120" cy="120" r="108" fill="none" stroke-width="10" stroke-linecap="round"
               stroke-dasharray="${2 * Math.PI * 108}" stroke-dashoffset="${2 * Math.PI * 108}"/>
@@ -232,8 +318,8 @@
       </div>
       <p class="micro">${a.emoji} ${esc(a.micro)}</p>
       <div class="spacer"></div>
-      <p class="muted small" style="text-align:center">Put the phone away. Come back when you're done.</p>
-      <button class="btn primary block" data-act="finish">I'm done</button>`;
+      <p class="footnote">phone away now. come back when you're done 🌿</p>
+      <button class="btn primary block" data-act="finish">i'm done ✓</button>`;
   }
 
   function startTick() {
@@ -261,22 +347,22 @@
       `<button class="option" data-act="what" data-v="${val}" aria-pressed="${d.what === val}"><span class="emoji">${emoji}</span><span><span class="t">${t}</span><br><span class="s">${s}</span></span></button>`;
     const mood = (v, label) => `<button class="mood" data-act="mood" data-v="${v}" aria-pressed="${d.mood === v}">${v}<span>${label}</span></button>`;
     return `
-      <div class="topbar"><button class="back" data-act="resume">‹ Back</button></div>
-      <div><p class="eyebrow">Reflect</p><h1>What did you do?</h1></div>
+      <div class="topbar"><button class="back" data-act="resume">‹ back</button></div>
+      <div><p class="eyebrow">reflect</p><h1>what did you do? 💭</h1></div>
       <div class="options">
-        ${opt("plan", a.emoji, a.name, "Did what I planned")}
-        ${opt("other", "🌿", "Something else offline", "Still counts")}
-        ${opt("phone", "📱", "Ended up on my phone", "That's okay")}
+        ${opt("plan", a.emoji, a.name.toLowerCase(), "did what i planned")}
+        ${opt("other", "🌿", "something else offline", "still counts")}
+        ${opt("phone", "📱", "ended up on my phone", "that's okay")}
       </div>
-      <div class="field" style="margin-top:0"><span class="label">How did it feel?</span>
-        <div class="moods">${mood("😌", "Calm")}${mood("😐", "Okay")}${mood("😣", "Hard")}</div>
+      <div class="field" style="margin-top:0"><span class="label">how did it feel?</span>
+        <div class="moods">${mood("😌", "calm")}${mood("😐", "okay")}${mood("😣", "hard")}</div>
       </div>
       <div class="row">
-        <div style="flex:0 0 120px"><span class="label">Minutes</span><input type="number" id="mins" inputmode="numeric" min="1" max="600" value="${d.minutes}"></div>
-        <div class="grow"><span class="label">Note (optional)</span><input type="text" id="note" maxlength="140" placeholder="Finished a chapter!" value="${esc(d.note)}"></div>
+        <div style="flex:0 0 120px"><span class="label">minutes</span><input type="number" id="mins" inputmode="numeric" min="1" max="600" value="${d.minutes}"></div>
+        <div class="grow"><span class="label">note (optional)</span><input type="text" id="note" maxlength="140" placeholder="finished a chapter!" value="${esc(d.note)}"></div>
       </div>
       <div class="spacer"></div>
-      <button class="btn primary block" data-act="saveReflect" ${d.what ? "" : "disabled"}>Save</button>`;
+      <button class="btn primary block" data-act="saveReflect" ${d.what ? "" : "disabled"}>save ✨</button>`;
   }
 
   let lastResult = null;
@@ -288,20 +374,23 @@
       return `
         <div class="celebrate">
           <div class="badge">🌱</div>
-          <h1>That's okay.</h1>
-          <p class="muted">Planning it is the habit. Try again next time. Your plan will be ready.</p>
+          <h1>that's okay.</h1>
+          <p class="muted">planning it is the habit. try again next time, your plan will be ready 💜</p>
         </div>
         <div class="spacer"></div>
-        <button class="btn primary block" data-act="home">Done</button>`;
+        <button class="btn primary block" data-act="home">done</button>`;
     }
+    const fresh = (r.newBadges || []).map((id) => MILESTONES.find((b) => b.id === id));
     return `
       <div class="celebrate">
         <div class="badge">✨</div>
-        <h1>${r.minutes} minutes,<br>unplugged.</h1>
-        <p class="muted">That's moment #${done.length}. ${fmtMinutes(totalMin)} phone-free so far.</p>
+        <h1>${r.minutes} minutes,<br><span class="soft">unplugged.</span></h1>
+        <p class="muted">that's moment #${done.length}. ${fmtMinutes(totalMin)} phone-free so far 🌸</p>
+        ${fresh.length ? `<p class="eyebrow" style="margin-top:12px">new badge unlocked</p>
+          <div class="badges new-badge" style="justify-content:center">${fresh.map((b) => `<span class="badge-chip">${b.emoji} ${b.name}</span>`).join("")}</div>` : ""}
       </div>
       <div class="spacer"></div>
-      <button class="btn primary block" data-act="home">Done</button>`;
+      <button class="btn primary block" data-act="home">done</button>`;
   }
 
   // ---------- Plan sheet ----------
@@ -324,33 +413,33 @@
 
     $sheet.innerHTML = `
       <div class="grabber"></div>
-      <div class="topbar"><h2 id="sheet-title">Plan a moment</h2><button class="btn ghost" data-act="closePlan">Cancel</button></div>
-      <div class="field"><span class="label">Where are you going?</span>
+      <div class="topbar"><h2 id="sheet-title">plan a moment ✨</h2><button class="btn ghost" data-act="closePlan">cancel</button></div>
+      <div class="field"><span class="label">where are you going?</span>
         <div class="chips">${Object.entries(SITUATIONS).map(([k, s]) =>
           `<button class="chip" data-act="sit" data-v="${k}" aria-pressed="${draft.situation === k}">${s.emoji} ${s.label}</button>`).join("")}</div>
       </div>
-      <div class="field"><span class="label">How long, roughly?</span>
+      <div class="field"><span class="label">how long, roughly?</span>
         <div class="chips">${DURATIONS.map((d) =>
           `<button class="chip" data-act="dur" data-v="${d}" aria-pressed="${draft.minutes === d}">${d === 60 ? "1 hr+" : d + " min"}</button>`).join("")}</div>
       </div>
       <div class="field row">
-        <div class="grow"><span class="label">Name it (optional)</span><input type="text" id="place" maxlength="40" placeholder="${SITUATIONS[draft.situation].place}" value="${esc(draft.place)}"></div>
-        <div style="flex:0 0 130px"><span class="label">Leaving at</span><input type="time" id="leaveAt" value="${esc(draft.leaveAt)}"></div>
+        <div class="grow"><span class="label">name it (optional)</span><input type="text" id="place" maxlength="40" placeholder="${SITUATIONS[draft.situation].place}" value="${esc(draft.place)}"></div>
+        <div style="flex:0 0 130px"><span class="label">leaving at</span><input type="time" id="leaveAt" value="${esc(draft.leaveAt)}"></div>
       </div>
-      ${"Notification" in window ? `<label class="toggle"><input type="checkbox" id="remind" ${draft.remind ? "checked" : ""}> Remind me 10 min before I leave</label>` : ""}
-      <div class="field"><span class="label">Bring this instead of scrolling</span>
+      ${"Notification" in window ? `<label class="toggle"><input type="checkbox" id="remind" ${draft.remind ? "checked" : ""}> remind me 10 min before i leave 🔔</label>` : ""}
+      <div class="field"><span class="label">bring this instead of scrolling</span>
         <div class="options">${ranked.slice(0, 4).map((a, i) => `
           <button class="option" data-act="pick" data-v="${a.id}" aria-pressed="${draft.activityId === a.id}">
             <span class="emoji">${a.emoji}</span>
             <span><span class="t">${a.name}</span><br><span class="s">${esc(a.micro)}</span></span>
-            ${i === 0 ? `<span class="best">Best fit</span>` : ""}
+            ${i === 0 ? `<span class="best">best fit ✧</span>` : ""}
           </button>`).join("")}</div>
       </div>
-      <div class="field"><span class="label">Your if-then plan</span>
+      <div class="field"><span class="label">your if-then plan</span>
         <textarea id="plan" rows="2" maxlength="160">${esc(draft.plan)}</textarea>
-        <p class="muted small" style="margin-top:6px">Saying exactly when and what makes you far more likely to do it.</p>
+        <p class="muted small" style="margin-top:6px">saying exactly when + what makes you way more likely to do it 🧠</p>
       </div>
-      <div class="field"><button class="btn primary block" data-act="savePlan">Save my plan</button></div>`;
+      <div class="field"><button class="btn primary block" data-act="savePlan">save my plan ✨</button></div>`;
     if (focusId) {
       const el = document.getElementById(focusId);
       if (el) { el.focus(); const v = el.value; el.value = ""; el.value = v; }
@@ -389,6 +478,9 @@
           status: "planned", packedItems: [], createdAt: Date.now(),
         });
         save(); closePlan(); scheduleReminder(); go("home");
+        // Demo moment: the friendly reminder slides in a few seconds after saving.
+        clearTimeout(showNotif.demo);
+        showNotif.demo = setTimeout(() => { const c = current(); if (c && c.status === "planned") showNotif(c); }, 2500);
         break;
       }
     }
@@ -417,7 +509,8 @@
         m.packedItems = m.packedItems.includes(i) ? m.packedItems.filter((x) => x !== i) : [...m.packedItems, i];
         save(); render(); break;
       }
-      case "packed": m.status = "packed"; save(); go("home"); break;
+      case "packed": m.status = "packed"; save(); go("home"); confetti(40); break;
+      case "previewNotif": showNotif(m); break;
       case "start": m.status = "active"; m.startedAt = Date.now(); save(); go("active"); break;
       case "resume": go(m && m.status === "active" ? "active" : "home"); break;
       case "cancel":
@@ -432,6 +525,7 @@
       case "mood": reflectDraft.mood = v; render(); break;
       case "saveReflect": {
         const d = reflectDraft;
+        const before = earned(completed());
         if (d.what === "phone") {
           m.status = "tried";
         } else {
@@ -439,9 +533,12 @@
           m.minutesSpent = d.minutes;
         }
         Object.assign(m, { outcome: d.what, mood: d.mood, note: d.note.trim(), endedAt: Date.now() });
-        lastResult = { what: d.what, minutes: d.minutes };
+        const newBadges = earned(completed()).filter((id) => !before.includes(id));
+        lastResult = { what: d.what, minutes: d.minutes, newBadges };
         reflectDraft = null;
-        save(); go("celebrate"); break;
+        save(); go("celebrate");
+        if (d.what !== "phone") confetti(newBadges.length ? 110 : 70);
+        break;
       }
     }
   });
